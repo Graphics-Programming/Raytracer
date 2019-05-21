@@ -1,5 +1,6 @@
 
 var Plane = function(normal, validPoint, color, reflectivity) {
+	
 	this.normal = normal.normalized();
 	this.validPoint = validPoint;
 	this.color = color || new Vector3(1, 1, 1);

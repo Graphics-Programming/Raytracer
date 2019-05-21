@@ -1,146 +1,163 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
 	<meta charset="utf-8">
 	<title>Raytracer</title>
 </head>
-<body>
-<canvas id='my-canvas'><canvas>
 
-<script src='vector3.js'></script>
-<script src='ray.js'></script>
-<script src='sphere.js'></script>
-<script src='plane.js'></script>
-<script>
+<body style="text-align:center; margin-top:100px; ">
+	<canvas id="my-canvas"></canvas>
+	<script src='vector3.js'></script>
+	<script src='ray.js'></script>
+	<script src='sphere.js'></script>
+	<script src='plane.js'></script>
+	<script>
+		// Canvas setup, don't need to touch any of this *******************************
+		// Get a reference to the javascript object associated with the canvas
+		var canvas = document.getElementById('my-canvas');
 
-// Canvas setup, don't need to touch any of this *******************************
-// Get a reference to the javascript object associated with the canvas
-var canvas = document.getElementById('my-canvas');
+		// The canvas dimension we will set
+		var pixelsAcross = 256; // pixels across
+		var pixelsDown = 256; // pixels down
 
-// The canvas dimension we will set
-var pixelsAcross = 256;  // pixels across
-var pixelsDown = 256; // pixels down
+		// Set dimensions and pixel scale (don't worry about pixel scale, it won't affect your maths)
+		var pixelScale = 2;
+		canvas.width = pixelsAcross;
+		canvas.height = pixelsDown;
+		canvas.style.cssText = 'width:' + (pixelsAcross * pixelScale) + 'px;height:' + (pixelsDown * pixelScale) + 'px';
 
-// Set dimensions and pixel scale (don't worry about pixel scale, it won't affect your maths)
-var pixelScale = 3;
-canvas.width = pixelsAcross;
-canvas.height = pixelsDown;
-canvas.style.cssText = 'width:' + (pixelsAcross * pixelScale) + 'px;height:' + (pixelsDown * pixelScale) + 'px';
+		// Get the context from the canvas (in this case we just want 2d)
+		var canvasContext = canvas.getContext('2d');
 
-// Get the context from the canvas (in this case we just want 2d)
-var canvasContext = canvas.getContext('2d');
-
-// Get an array representing all of the pixels
-// Arranged left to right, top to bottom
-var imageData = canvasContext.getImageData(0, 0, pixelsAcross, pixelsDown);
-// end canvas setup ************************************************************
+		// Get an array representing all of the pixels
+		// Arranged left to right, top to bottom
+		var imageData = canvasContext.getImageData(0, 0, pixelsAcross, pixelsDown);
+		// end canvas setup ************************************************************
 
 
-// Raytracer setup
-var fov = 45;   // if this changes, your code should still work
-var fovRadians; // todo -> convert degrees to radians
+		// Raytracer setup
+		var fov = 45; // field of view in degrees if this changes, your code should still work
 
-var pixelWidth; // todo -> what's the size of a pixel from left to right?
-var pixelHalfWidth; // todo -> half of the pixel width
+		// todo -> convert degrees to radians
+		var fovRadians = fov * (Math.PI / 180);
 
-// How far away (scalar) the eye is from the image plane (see MV3202 guide for more info)
-var eyeDistance; // = todo -> hint: related to tangent and field of view (see slides)
-// -----------
-// |         /
-// |        /
-// |       /
-// | 45/2 /      <---- half angle
-// |     /
-// |    /
-// |   /
-// |  /
-// | /
+		var pixelWidth = 2 / pixelsAcross; // todo -> what's the size of a pixel from left to right?
+		var pixelHalfWidth = pixelWidth / 2; // todo -> half of the pixel width
 
-// important vectors
-var eyeCoordinate = new Vector3(0, 0, eyeDistance); // all of your rays will use this
 
-// these can be convenient (up to you whether you want to use them)
-var right = new Vector3(1, 0, 0);
-var up = new Vector3(0, 1, 0);
+		// How far away (scalar) the eye is from the image plane (see MV3202 guide for more info)
+		var eyeDistance = 1 / Math.tan(fovRadians / 2); // = todo -> hint: related to tangent and field of view (see slides)
+		// -----------
+		// |         /
+		// |        /
+		// |       /
+		// | 45/2 /      <---- half angle
+		// |     /
+		// |    /
+		// |   /
+		// |  /
+		// | /
 
-// Define the scene objects here ------------------
+		// important vectors
+		var eyeCoordinate = new Vector3(0, 0, eyeDistance); // all of your rays will use this
 
-// These are 3d definitions that match all of the math we did in class
-// They also provide a "raycast" function that you can pass a ray to
-// in order to find intersection between the ray and the object
+		// these can be convenient (up to you whether you want to use them)
+		var right = new Vector3(1, 0, 0);
+		var up = new Vector3(0, 1, 0);
 
-var sphere; // todo = new Sphere(..., ...);
-var plane; // todo = new Plane(..., ...);
+		// Define the scene objects here ------------------
 
-// end of raytracer setup ******************************************************
 
-// -----------------------------------------------------------------------------
-// return a ray that goes from the eye point through the pixel at index (xPixelIndex, yPixelIndex)
-function generateRayForPixel(xPixelIndex, yPixelIndex) {
+		var sphere = new Sphere(new Vector3(0, 0, 0), 0.2);
+		var floor = new Plane(new Vector3(0, 1, 0), new Vector3(0, -.2, 0));
+		var leftWall = new Plane(new Vector3(1, 0, 0), new Vector3(-1, 0, 0),new Vector3(1, 0, 0));
+		var rightWall = new Plane(new Vector3(-1, 0, 0), new Vector3(1, 0, 0),new Vector3(0, 1, 0));
+		var backWall = new Plane(new Vector3(0, 0, 1), new Vector3(0, 0, -1));
+		var ceiling = new Plane(new Vector3(0, -1, 0), new Vector3(0, 1, 0));
+		var scene = [sphere, floor, leftWall, rightWall, backWall, ceiling];
+		// end of raytracer setup ******************************************************
 
-	var pixelCoordinate; // = todo: calculate pixel position
-	var direction; // = vector from the eye to the pixel
-
-	// Creates a ray that will automatically normalize the direction
-	// Uncomment this (the ray line of code) once you've calculated the pixelCoordinate in space and the
-	// direction from the eye to the pixelCoordinate
-	var pixelRay = new Ray(eyeCoordinate, direction);
-	return pixelRay;
-}
-
-// -----------------------------------------------------------------------------
-function setPixelColor(xPixelIndex, yPixelIndex, shadeOfGray /*[0,1]*/) {
-	var index;
-
-	imageData.data[index + 0] = shadeOfGray * 255;
-	imageData.data[index + 1] = shadeOfGray * 255;
-	imageData.data[index + 2] = shadeOfGray * 255;
-	imageData.data[index + 3] = 255;
-
-	// feel free to delete this when you are done implementing this function
-	if (index == undefined) {
-		alert('need to calculate the image data index for setting pixel color');
-		throw 'error';
-	}
-}
-
-// -----------------------------------------------------------------------------
-function updateAndRender(timeElapsed) {
-	// Go through every pixel
-	for (var yPixelIndex = 0; yPixelIndex < pixelsDown; ++yPixelIndex) {
-
-		for (var xPixelIndex = 0; xPixelIndex < pixelsAcross; ++xPixelIndex) {
-
-			// Uncomment this once you've coded generateRayForPixel
-			//var pixelRay = generateRayForPixel(xPixelIndex, yPixelIndex);
-
-			// See if the ray intersects the sphere or the plane (or every object in our scene)
-			// Uncomment when your sphere or plane code is ready
-			//var sphereResult = sphere.raycast(pixelRay);
-			//var planeResult = plane.raycast(pixelRay);
-
-			//var hitAnything = (sphereResult.hit || planeResult.hit);
-
-			//if (hitAnything) {
-				// determine  which hit object is the closest (in case there is more than 1 hit)
-				setPixelColor(xPixelIndex, yPixelIndex, 0.5); // middle gray
-			//} else {
-				// we didn't hit anything, choose an appropriate backbround color
-				setPixelColor(xPixelIndex, yPixelIndex, 0.1); // dark gray
-			//}
+		// -----------------------------------------------------------------------------
+		// return a ray that goes from the eye point through the pixel at index (xPixelIndex, yPixelIndex)
+		function generateRayForPixel(xPixelIndex, yPixelIndex) {
+			var pixelCoordinate = new Vector3(-1 + (xPixelIndex * pixelWidth - pixelHalfWidth), 1 - (yPixelIndex * pixelWidth +
+				pixelHalfWidth), 0);
+			var direction = pixelCoordinate.clone().subtract(eyeCoordinate);
+			// direction from the eye to the pixelCoordinate
+			var pixelRay = new Ray(eyeCoordinate, direction);
+			return pixelRay;
 		}
-	}
 
-	// Take our array of color data and give to the canvas to display
-	canvasContext.putImageData(imageData, 0, 0);
+		// -----------------------------------------------------------------------------
+		function setPixelColor(xPixelIndex, yPixelIndex, color /*[0,1]*/ ) {
+			var index = ((yPixelIndex * pixelsAcross + xPixelIndex) * 4);
+	
+			imageData.data[index + 0] = color.x * 255;
+			imageData.data[index + 1] = color.y * 255;
+			imageData.data[index + 2] = color.z * 255;
+			imageData.data[index + 3] = 255;
 
-	// Let the browser know it should call this function again when it's time to render
-	requestAnimationFrame(updateAndRender);
-}
+		}
 
-// We are ready to render, let the browser know
-requestAnimationFrame(updateAndRender);
+		// -----------------------------------------------------------------------------
+		function updateAndRender(timeElapsed) {
+			var seconds = timeElapsed * 0.001;
+			var lightSource = new Vector3(Math.cos(seconds) * 0.5, 0, Math.sin(seconds) * 0.5);
+			for (var yPixelIndex = 0; yPixelIndex < pixelsDown; ++yPixelIndex) {
 
-</script>
+				for (var xPixelIndex = 0; xPixelIndex < pixelsAcross; ++xPixelIndex) {
+					//  create the ray for this pixel using generateRayForPixel  
+					var pixelRay = generateRayForPixel(xPixelIndex, yPixelIndex);
+
+
+				
+					var sceneResult;
+					for (var i = 0; i < scene.length; i++) {
+						if (scene[i].raycast(pixelRay).hit) {
+							sceneResult = scene[i].raycast(pixelRay);
+							
+						}
+					}
+					var colors;
+					for (var i = 0; i < scene.length; i++) {
+						if ( scene[i].raycast(pixelRay).distance < sceneResult.distance) {
+							sceneResult = scene[i].raycast(pixelRay);
+							colors = scene[i].color.clone();
+						}
+						
+					}
+
+					var normalDotLight;
+					if (sceneResult.hit) {
+						var light = lightSource.clone().subtract(sceneResult.point);
+						normalDotLight = sceneResult.normal.clone().dot(light.normalized());
+						var shadow = sphere.raycast(new Ray(sceneResult.point, light));
+						if (shadow.distance < light.length()) {
+							normalDotLight = 0;
+						}
+						setPixelColor(xPixelIndex, yPixelIndex, colors.multiplyScalar(normalDotLight));
+
+					} else {
+						setPixelColor(xPixelIndex, yPixelIndex, 0.1);
+					}
+
+
+				} //End inner for-loop
+			} // End outer for-loop
+			// Take our array of color data and give to the canvas to display
+			canvasContext.putImageData(imageData, 0, 0);
+			// Let the browser know it should call this function again when it's time to render
+			requestAnimationFrame(updateAndRender);
+		}
+		// We are ready to render, let the browser know
+		requestAnimationFrame(updateAndRender);
+
+		
+	</script>
+
 </body>
-</html>
+
+</html> 
+ 
+
